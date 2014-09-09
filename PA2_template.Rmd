@@ -1,0 +1,147 @@
+---
+title: "The Impact of Severe Weather Events on the Public Health and Economy in the US from 1950 to 2011"
+author: "Weijia Chen"
+date: "8 September 2014"
+output: 
+  html_document:
+    keep_md: true
+---
+
+### Synonpsis
+
+The aim of this report is to investigate the impact of different severe weather events on public health and economy based on the storm database collected by the US National Oceanic and Atmospheric Administration's (NOAA) from 1950 to 2011. The variables which are applied in this report include **_fatalities_**, **_injuries_**, **_property_** and **_crop damage_** to identify the most harmful weather event to the population health and economy. Based on the explortary data analysis, it is found that Tornado is the most dominated severe weather event to contribute the damage of both public health and economy.
+
+### Data Precessing
+
+```{r,echo=TRUE}
+library(R.utils)
+fileURL <- "http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file(fileURL, destfile = "~/Downloads/stormdata.csv.bz2") #download the zip file
+bunzip2("~/Downloads/stormdata.csv.bz2", overwrite=T, remove=F) #unzip the file
+stormdata <- read.csv("~/Downloads/stormdata.csv", sep = ",") #load file and store it to stormdata object
+```
+
+Load relevant graphic system and time package
+```{r, echo=TRUE}
+library(gridExtra)
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+```
+
+Getting and cleaning data: first change data object class and BGN_DATE to time class, remove blank variables, change variable names to lower case, remove underline.
+
+```{r,echo=TRUE}
+names(stormdata) <- tolower(names(stormdata)) #change variable names to lower case
+names(stormdata) <- gsub("_","",names(stormdata)) #remove underline
+stormdata <- tbl_df(stormdata) #902297 * 37
+stormdata <- select(stormdata, -(bgnrange: endlocati), -(cropdmgexp:zonenames), -remarks) #remove unused variable
+stormdata$bgndate <- mdy_hms(stormdata$bgndate) #change bgndate class to date
+stormdata <- mutate(stormdata, ecolos = propdmg + cropdmg) #add one new col named ecolos. It means economic losses. It equals to propdmg + cropdmg 58734 * 21
+select(stormdata, evtype, fatalities, injuries, ecolos) #check the required four variables
+```
+
+#### Impact on Economy
+
+Investigate the most harmful evtype have the greatest economic consequences. Variables evtype and ecolos. Preparing the data frame for bar and pie chart of the impact of sever weather event on economy.
+
+```{r,echo=TRUE}
+stormdata <- group_by(stormdata, evtype) #group the stormdata by evtype
+ecolosdata <- summarise(stormdata, ecolos = sum(ecolos)) #assign a new object to sort evtype and ecolos data
+ecolosdata <- arrange(ecolosdata, desc(ecolos)) #descending the data by ecolos
+ecolosdata <- mutate(ecolosdata, percentage = round(ecolosdata$ecolos / sum(ecolosdata$ecolos) * 100, digits = 0))
+ecolostop <- filter(ecolosdata, ecolos >= 100000)
+ecolostop$evtype <- factor(ecolostop$evtype, levels = ecolostop$evtype)
+ecolostop5 <- ecolostop[1:6,]
+ecolostop5$evtype <- as.character(ecolostop5$evtype)
+ecolostop5$evtype[6] <- c("other")
+ecolostop5$ecolos[6] <- sum(ecolosdata$ecolos) - 8693036
+ecolostop5$percentage[6] <- 29
+head(ecolosdata, n = 12) #check the top ten events which cause the significant economic losses
+```
+
+#### Impact on Public Health
+
+Investigate the most harmful evtype with respect to population health. Variables evtype, fatalities, and injuries will be used.
+
+#### Fatalities by severe weather
+
+```{r,echo=TRUE}
+stormdata <- group_by(stormdata, evtype) #group the stormdata by evtype
+fatadata <- summarise(stormdata, fatalities = sum(fatalities)) #assign a new object to sort evtype and fatalities data
+fatadata <- arrange(fatadata, desc(fatalities)) #descending the data by fatalities
+fatatop <- filter(fatadata, fatalities >= 220)
+fatatop$evtype <- factor(fatatop$evtype, levels = fatatop$evtype)
+head(fatadata, n = 20) 
+```
+
+#### Injuries by severe weather
+
+```{r,echo=TRUE}
+stormdata <- group_by(stormdata, evtype) #group the stormdata by evtype
+injurydata <- summarise(stormdata, injuries = sum(injuries)) #assign a new object to sort evtype and injuries data
+injurydata <- arrange(injurydata, desc(injuries)) #descending the data by injuries
+injurytop <- filter(injurydata, injuries >= 1330)
+injurytop$evtype <- factor(injurytop$evtype, levels = injurytop$evtype)
+head(injurydata, n = 20) 
+```
+
+
+### Results
+
+Because evtype is a categorical variable, ecolos, fatalities and injuries are numeric variables, therefore, bar chart and pie chart are appropriate in visualising the results. 
+
+#### Bar plot of impact on Economy
+```{r,echo=TRUE}
+ecolosplot <- ggplot(data = ecolostop, aes(x = evtype, y = ecolos)) + 
+        geom_bar(stat="identity", colour="black") + xlab("Weather Event") + 
+        ylab("Total Cost ($)") +  
+        ggtitle("Total Economy Losses by Severe Weather Events \n in the US from 1950 to 2011") + 
+        theme(panel.background = element_rect(fill = 'white', colour = 'black'), panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), axis.text.x = element_text(angle = 45,hjust = 1)) 
+        
+ecolosplot
+```
+
+#### Pie chart of fatalities by severe weather
+
+```{r,echo=TRUE}
+slices <- ecolostop5$percentage
+lbls <- ecolostop5$evtype
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct) # add percents to labels 
+lbls <- paste(lbls,"%",sep="") # ad % to labels 
+pie(slices,labels = lbls, col=rainbow(length(lbls)),
+          main="Pie Chart of Severe Weather Event in Impacting the Economy Losses \n in the US from 1950 to 2011")
+```
+
+
+#### Bar plot of fatalities by severe weather
+
+```{r,echo=TRUE}
+fataplot <- ggplot(data = fatatop, aes(y = fatalities, x = evtype)) + 
+        geom_bar(stat = "identity", colour = "black") + xlab("Weather Event") +
+        ylab("Number of Fatalities") + ggtitle("Total Fatalities by Weather Event\n in the US from 1950 to 2011") + theme(panel.background = element_rect(fill = 'white', colour = 'black'), panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), axis.text.x = element_text(angle = 45,hjust = 1))
+```
+
+#### Bar plot of fatalities by severe weather
+
+```{r,echo=TRUE}
+injuryplot <- ggplot(data = injurytop, aes(y = injuries,x = evtype)) + 
+        geom_bar(stat = "identity", colour = "black") + xlab("Weather Event") +
+        ylab("Number of Injuries") + ggtitle("Total Injuries by Weather Event\n in the US from 1950 to 2011") + theme(panel.background = element_rect(fill = 'white', colour = 'black'), panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), axis.text.x = element_text(angle = 45,hjust = 1))
+```
+
+#### Plot output
+```{r,echo=TRUE}
+grid.arrange(fataplot, injuryplot, ncol = 2)
+```
+
+
+## Conclusion
+
+From the top ten ecolostop data, it can be clearly seen that *Tornados* cause the greatest economic impact from 1950 to 2011. From the pie char, it can be clearly seen that the top five sever weather events, *TORNADO*, *FLASH FLOOD*, *TSTM WIND*, *HAIL* and *FLOOD* accounting for 71 per cent economic losses from 1950 to 2011. Meanwhile, **Tornados** cause the greatest fatalities and injuries impact from 1950 to 2011 as well
+
+
